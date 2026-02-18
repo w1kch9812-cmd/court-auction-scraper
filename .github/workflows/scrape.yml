@@ -50,8 +50,10 @@ jobs:
             npx tsx scripts/scrape-documents-diag.ts
             exit 0
           fi
+          set +e
           npx tsx scripts/scrape-documents.ts $FLAGS
           EXIT_CODE=$?
+          set -e
           if [ $EXIT_CODE -eq 78 ]; then
             echo "::warning::이 러너의 IP가 차단됨. workflow를 다시 실행해주세요."
             exit 0
