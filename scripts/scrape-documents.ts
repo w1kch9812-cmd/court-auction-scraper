@@ -49,6 +49,7 @@ interface ProgressData {
 }
 
 // ======= 송달/문건내역 API =======
+// WebSquare 프레임워크가 보내는 헤더를 그대로 포함해야 IP 차단 우회 가능
 async function scrapeDocuments(
     page: Page,
     cortOfcCd: string,
@@ -60,11 +61,17 @@ async function scrapeDocuments(
             try {
                 const res = await fetch('/pgj/pgj15A/selectDlvrOfdocDtsDtl.on', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json;charset=UTF-8',
+                        'Accept': 'application/json',
+                        'submissionid': 'mf_wfm_mainFrame_wfm_ofdocDlvrDts_sbm_selectDlvrOfdocDts',
+                        'sc-userid': 'NONUSER',
+                    },
                     body: JSON.stringify({
                         dma_srchDlvrOfdocDts: {
                             cortOfcCd: params.cortOfcCd,
                             csNo: params.csNo,
+                            srchFlag: 'F',
                         },
                     }),
                 });
