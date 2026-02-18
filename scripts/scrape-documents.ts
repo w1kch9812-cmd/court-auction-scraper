@@ -63,13 +63,19 @@ async function scrapeDocuments(
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ cortOfcCd: params.cortOfcCd, csNo: params.csNo }),
                 });
-                if (!res.ok) return { __error: true, status: res.status };
-                const json = await res.json();
+                const text = await res.text();
+                let json;
+                try { json = JSON.parse(text); } catch { return { __error: true, status: res.status, body: text.slice(0, 200) }; }
                 // 새 API 래퍼 형식 대응
                 const data = json.data || json;
                 if (json.message?.includes('차단') || data?.ipcheck === false) {
                     return { __blocked: true, message: json.message };
                 }
+                // 550 = 데이터 없음 (정상 응답)
+                if (res.status === 550) {
+                    return { __nodata: true, message: json.message || '데이터 없음' };
+                }
+                if (!res.ok) return { __error: true, status: res.status, message: json.message };
                 return data;
             } catch (e) {
                 return { __error: true, message: String(e) };
@@ -237,7 +243,11 @@ async function main() {
 
             consecutiveBlocks = 0;
 
-            if (result && !result.__error) {
+            if (result?.__nodata) {
+                entry.deliveryRecords = [];
+                entry.documentRecords = [];
+                console.log(`- 데이터없음`);
+            } else if (result && !result.__error) {
                 const deliveryList = result.dlt_dlvrDtsLst || [];
                 const documentList = result.dlt_ofdocDtsLst || [];
                 const mergerList = result.dlt_mrgDpcnSbxLst || [];
