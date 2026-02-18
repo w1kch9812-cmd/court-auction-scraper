@@ -48,6 +48,29 @@ interface ProgressData {
     lastUpdated: string;
 }
 
+// ======= 사건 상세 열기 (서버 상태 확립) =======
+async function openCaseDetail(
+    page: Page,
+    cortOfcCd: string,
+    csNo: string,
+): Promise<boolean> {
+    return page.evaluate(
+        async (params: { cortOfcCd: string; csNo: string }) => {
+            try {
+                const res = await fetch('/pgj/pgj15A/selectAuctnCsSrchRslt.on', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ cortOfcCd: params.cortOfcCd, csNo: params.csNo }),
+                });
+                return res.ok || res.status === 550;
+            } catch {
+                return false;
+            }
+        },
+        { cortOfcCd, csNo },
+    );
+}
+
 // ======= 송달/문건내역 API =======
 async function scrapeDocuments(
     page: Page,
@@ -225,6 +248,10 @@ async function main() {
         }
 
         try {
+            // 사건 상세 먼저 열어서 서버 상태 확립
+            await openCaseDetail(page, t.cortOfcCd, t.csNo);
+            await page.waitForTimeout(300);
+
             const result = await scrapeDocuments(page, t.cortOfcCd, t.csNo);
 
             if (result?.__blocked) {
