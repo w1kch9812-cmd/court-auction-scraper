@@ -134,7 +134,13 @@ async function main() {
         return true;
     });
 
-    if (TEST_MODE) targets = targets.slice(0, 5);
+    if (TEST_MODE) {
+        // 테스트: 현황조사 있는 건(진행된 사건) 우선 + 초기 사건 섞어서
+        const advanced = targets.filter(d => d.investigation?.dma_curstExmnMngInf && Object.keys(d.investigation.dma_curstExmnMngInf).length > 0);
+        const early = targets.filter(d => !d.investigation?.dma_curstExmnMngInf || Object.keys(d.investigation.dma_curstExmnMngInf).length === 0);
+        targets = [...advanced.slice(0, 3), ...early.slice(0, 2)];
+        console.log(`테스트: 진행건 ${Math.min(3, advanced.length)}개 + 초기건 ${Math.min(2, early.length)}개`);
+    }
 
     console.log(`수집 대상: ${targets.length}건 (완료: ${completedSet.size}건)\n`);
 
@@ -246,7 +252,7 @@ async function main() {
             if (result?.__nodata) {
                 entry.deliveryRecords = [];
                 entry.documentRecords = [];
-                console.log(`- 데이터없음`);
+                console.log(`- 데이터없음 (${result.message})`);
             } else if (result && !result.__error) {
                 const deliveryList = result.dlt_dlvrDtsLst || [];
                 const documentList = result.dlt_ofdocDtsLst || [];
