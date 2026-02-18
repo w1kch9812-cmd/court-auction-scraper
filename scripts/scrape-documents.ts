@@ -24,8 +24,8 @@ const SEARCH_PAGE = 'https://www.courtauction.go.kr/pgj/index.on?w2xPath=/pgj/ui
 const DELAY_BETWEEN = 1500;
 const BATCH_REST_INTERVAL = 50;
 const BATCH_REST_DURATION = 15000;
-const IP_BLOCK_WAIT = 3 * 60 * 1000;
-const MAX_CONSECUTIVE_BLOCKS = 5;
+const IP_BLOCK_WAIT = 30 * 1000;
+const MAX_CONSECUTIVE_BLOCKS = 2;
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DETAILS_FILE = path.join(DATA_DIR, 'court-auction-details.json');
@@ -46,29 +46,6 @@ interface ProgressData {
     total: number;
     startedAt: string;
     lastUpdated: string;
-}
-
-// ======= 사건 상세 열기 (서버 상태 확립) =======
-async function openCaseDetail(
-    page: Page,
-    cortOfcCd: string,
-    csNo: string,
-): Promise<boolean> {
-    return page.evaluate(
-        async (params: { cortOfcCd: string; csNo: string }) => {
-            try {
-                const res = await fetch('/pgj/pgj15A/selectAuctnCsSrchRslt.on', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ cortOfcCd: params.cortOfcCd, csNo: params.csNo }),
-                });
-                return res.ok || res.status === 550;
-            } catch {
-                return false;
-            }
-        },
-        { cortOfcCd, csNo },
-    );
 }
 
 // ======= 송달/문건내역 API =======
@@ -107,6 +84,24 @@ async function scrapeDocuments(
         { cortOfcCd, csNo },
     );
 }
+
+
+// ======= IP 사전 검사 =======
+async function preflightCheck(page: Page, cortOfcCd: string, csNo: string): Promise<boolean> {
+    console.log(`IP 차단 사전 검사: ${cortOfcCd}/${csNo}...`);
+    const result = await scrapeDocuments(page, cortOfcCd, csNo);
+    if (result?.__blocked) {
+        console.log('이 러너의 IP가 차단됨. 재실행 필요.');
+        return false;
+    }
+    if (result?.__error) {
+        console.log(`API 에러: ${result.message || result.status}. 재실행 필요.`);
+        return false;
+    }
+    console.log('IP 검사 통과! 수집 시작.');
+    return true;
+}
+
 
 // ======= 진행상황 관리 =======
 function loadProgress(): ProgressData {
@@ -221,6 +216,14 @@ async function main() {
     }
     console.log('세션 확보 완료\n');
 
+    // IP 사전 검사
+    const firstTarget = targets[0];
+    const ipOk = await preflightCheck(page, firstTarget.cortOfcCd, firstTarget.csNo);
+    if (!ipOk) {
+        await browser.close();
+        process.exit(78); // Special exit code: blocked IP, retry with different runner
+    }
+
     // 통계
     let success = 0;
     let errors = 0;
@@ -248,9 +251,6 @@ async function main() {
         }
 
         try {
-            // 사건 상세 먼저 열어서 서버 상태 확립
-            await openCaseDetail(page, t.cortOfcCd, t.csNo);
-            await page.waitForTimeout(300);
 
             const result = await scrapeDocuments(page, t.cortOfcCd, t.csNo);
 
@@ -263,7 +263,7 @@ async function main() {
                     saveDetails();
                     saveProgress(progress);
                     await browser.close();
-                    process.exit(1);
+                    process.exit(78); // Blocked IP, retry with different runner
                 }
 
                 console.log(`  ${IP_BLOCK_WAIT / 1000}초 대기...`);

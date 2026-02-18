@@ -41,17 +41,22 @@ jobs:
 
       - name: Run scraper
         run: |
-          if [ "${{ inputs.mode }}" = "diag" ]; then
+          FLAGS=""
+          if [ "${{ inputs.mode }}" = "test" ]; then
+            FLAGS="--test"
+          elif [ "${{ inputs.mode }}" = "resume" ]; then
+            FLAGS="--resume"
+          elif [ "${{ inputs.mode }}" = "diag" ]; then
             npx tsx scripts/scrape-documents-diag.ts
-          else
-            FLAGS=""
-            if [ "${{ inputs.mode }}" = "test" ]; then
-              FLAGS="--test"
-            elif [ "${{ inputs.mode }}" = "resume" ]; then
-              FLAGS="--resume"
-            fi
-            npx tsx scripts/scrape-documents.ts $FLAGS
+            exit 0
           fi
+          npx tsx scripts/scrape-documents.ts $FLAGS
+          EXIT_CODE=$?
+          if [ $EXIT_CODE -eq 78 ]; then
+            echo "::warning::이 러너의 IP가 차단됨. workflow를 다시 실행해주세요."
+            exit 0
+          fi
+          exit $EXIT_CODE
 
       - name: Upload results as artifact
         if: always()
