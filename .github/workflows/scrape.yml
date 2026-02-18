@@ -13,6 +13,7 @@ on:
           - test
           - resume
           - diag
+          - diag2
 
 jobs:
   scrape:
@@ -48,6 +49,9 @@ jobs:
             FLAGS="--resume"
           elif [ "${{ inputs.mode }}" = "diag" ]; then
             npx tsx scripts/scrape-documents-diag.ts
+            exit 0
+          elif [ "${{ inputs.mode }}" = "diag2" ]; then
+            npx tsx scripts/scrape-documents-diag2.ts
             exit 0
           fi
           set +e
