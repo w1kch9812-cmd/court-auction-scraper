@@ -1,0 +1,75 @@
+name: Scrape Court Auction Documents
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: '실행 모드'
+        required: true
+        default: 'full'
+        type: choice
+        options:
+          - full
+          - test
+          - resume
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run scraper
+        run: |
+          FLAGS=""
+          if [ "${{ inputs.mode }}" = "test" ]; then
+            FLAGS="--test"
+          elif [ "${{ inputs.mode }}" = "resume" ]; then
+            FLAGS="--resume"
+          fi
+          npx tsx scripts/scrape-documents.ts $FLAGS
+
+      - name: Upload results as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: court-auction-details
+          path: data/court-auction-details.json
+          retention-days: 30
+
+      - name: Upload progress as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scrape-progress
+          path: temp/progress.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Commit results
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/court-auction-details.json temp/progress.json || true
+          git diff --staged --quiet || git commit -m "chore: update court auction data ($(date -u '+%Y-%m-%d %H:%M'))"
+          git push
